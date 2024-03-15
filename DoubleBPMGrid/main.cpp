@@ -40,8 +40,6 @@ VOID change_bpm(FILTER* fp, double pw) {
 		int32_t bpmValue = *bpmPointer;
 
 		if (bpmValue != (int)(orig_bpm * power)) {
-			//MessageBox(NULL, std::to_string(bpmValue).c_str(), TEXT(PLUGIN_NAME), MB_OK);
-			//MessageBox(NULL, std::to_string(orig_bpm * power).c_str(), TEXT(PLUGIN_NAME), MB_OK);
 			orig_bpm = bpmValue;
 			power = 1;
 		}
@@ -88,7 +86,7 @@ static int track_s[] = { 2 };	//	トラックバーの下限値
 static int track_e[] = { 8 };	//	トラックバーの上限値
 
 AviUtl::FilterPluginDLL filter = {
-	AviUtl::FilterPlugin::Flag::AlwaysActive,
+	AviUtl::FilterPlugin::Flag::AlwaysActive | AviUtl::FilterPlugin::Flag::ExInformation,
 	0, 0,
 	PLUGIN_NAME,
 	1, track_name, track_default,
