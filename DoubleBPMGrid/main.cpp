@@ -8,7 +8,7 @@
 #define FILTER AviUtl::FilterPlugin
 
 #define PLUGIN_NAME "BPMグリッド倍化"
-#define PLUGIN_VERSION " v1.0 by Garech"
+#define PLUGIN_VERSION " v1.1 by Garech"
 #define FULL_PLUGIN_NAME PLUGIN_NAME PLUGIN_VERSION
 
 double power;
@@ -35,9 +35,15 @@ VOID change_bpm(FILTER* fp, double pw) {
 
 	exeditfp = get_exeditfp(fp);
 	if (hModule != NULL && exeditfp != NULL) {
+		uintptr_t isGridShownAddress = reinterpret_cast<uintptr_t>(hModule) + 0x00196760;
+		int32_t* isGridShown = reinterpret_cast<int32_t*>(isGridShownAddress);
+
 		uintptr_t bpmAddress = reinterpret_cast<uintptr_t>(hModule) + 0x00159190;
 		int32_t* bpmPointer = reinterpret_cast<int32_t*>(bpmAddress);
 		int32_t bpmValue = *bpmPointer;
+
+		uintptr_t drawBpmAddress = reinterpret_cast<uintptr_t>(hModule) + 0x000A4078;
+		double_t* drawBpmPointer = reinterpret_cast<double_t*>(drawBpmAddress);
 
 		if (bpmValue != (int)(orig_bpm * power)) {
 			orig_bpm = bpmValue;
@@ -48,9 +54,9 @@ VOID change_bpm(FILTER* fp, double pw) {
 
 		bpmValue = orig_bpm * power;
 		*bpmPointer = bpmValue;
+		*drawBpmPointer = (double)bpmValue;
 
-		PostMessageA(exeditfp->hwnd, WM_COMMAND, 1091, -1);
-		keybd_event(VK_RETURN, 0, KEYEVENTF_EXTENDEDKEY | 0, 0);
+		if (isGridShown != 0) ::InvalidateRect(exeditfp->hwnd, nullptr, FALSE);
 
 	}
 }
@@ -78,7 +84,7 @@ BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, AviUtl:
 	return FALSE;
 }
 
-static const char* check_name[] = { "↑BPMを半分にする（グリッド間隔を広める）↑", "↓BPMを2倍にする（グリッド間隔を狭める）↓" , "BPMを元に戻す"};
+static const char* check_name[] = { "↑BPMを半分にする（グリッド間隔を広める）↑", "↓BPMを2倍にする（グリッド間隔を狭める）↓" , "BPMを元に戻す" };
 static int   check_def[] = { -1, -1, -1 };
 static const char* track_name[] = { "変更倍率" };
 static int track_default[] = { 2 };	//	トラックバーの初期値
