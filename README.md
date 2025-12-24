@@ -9,7 +9,7 @@ https://github.com/Garech-mas/DoubleBPMGrid/releases/latest
 上記のリンクにアクセスした後、`DoubleBPMGrid-v2.xx.zip` からダウンロードできます。
 
 ## 導入方法 (AviUtl 無印)
-上記リンクより `DoubleBPMGrid.auf` をダウンロードし、AviUtlと同階層（またはPluginsフォルダ）の中にコピーしてください。
+ZIPの中に入っている `DoubleBPMGrid.auf` を、AviUtlと同階層（またはPluginsフォルダ）の中にコピーしてください。
 - 拡張編集 version 0.92 以外のバージョンでは動作しません。
 
 - Visual C++ 再頒布可能パッケージ 2015-2022 (x86) をインストールしている必要があります。
