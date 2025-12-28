@@ -24,6 +24,7 @@ LOG_HANDLE* logger = nullptr;
 
 // 定数群
 static constexpr float EPSILON_ROUNDING = 1e-6; // 丸め誤差補正値
+static constexpr double EPSILON_FRAME = 1e-12;
 
 // アクセサ
 float get_tempo() { return g_tempo; }
@@ -37,10 +38,24 @@ LOG_HANDLE* get_logger() { return logger; }
 
 
 /// 基準時間(秒)をフレーム値に変換
+///  - 値が整数に十分近ければその整数を返す (例: 15.0 -> 15)
+///  - それ以外は切り上げ(ceil)する (例: 13.99998 -> 14, 14.00001 -> 15)
 int offset_to_frame(float offset_sec, EDIT_INFO* info) {
-	if (info->rate <= 0 || info->scale <= 0) return 0;
-	double fps = (double)info->rate / (double)info->scale;
-	return (int)std::floor(((double)offset_sec * fps) + EPSILON_ROUNDING);
+	if (!info || info->rate <= 0 || info->scale <= 0) return 0;
+	const double fps = static_cast<double>(info->rate) / static_cast<double>(info->scale);
+
+	// 秒 → フレーム変換
+	const double frames = offset_sec * fps;
+
+	// 浮動小数誤差で「ほぼ整数」になった場合は丸める
+	const double tol = 1e-5;
+	const double nearest = std::round(frames);
+	if (std::abs(frames - nearest) <= tol) {
+		return static_cast<int>(nearest);
+	}
+
+	// 境界誤差対策として微小値を引いた上で切り上げ
+	return static_cast<int>(std::ceil(frames - EPSILON_FRAME));
 }
 
 /// BPMを設定する
@@ -51,8 +66,6 @@ static bool set_bpm(float new_tempo) {
 		logger->warn(logger, buf);
 		return false;
 	}
-
-	update_gui();
 
 	edit_handle->call_edit_section_param(
 		(void*)&new_tempo,
@@ -92,7 +105,6 @@ void multiply_bpm(float new_rate) {
 	if (!set_bpm(g_tempo * g_rate)) {
 		g_rate = before_rate;
 	}
-	update_gui();
 }
 
 
@@ -108,12 +120,11 @@ void shift_grid(int dir) {
 		int current_f = offset_to_frame((float)edit->info->grid_bpm_offset, info);
 		int next_f = current_f + dir;
 
-		g_offset = (float)next_f * info->scale / info->rate + EPSILON_ROUNDING;
+		// フレーム番号をそのまま秒に変換
+		g_offset = (float)next_f * info->scale / info->rate;
 
 		edit->set_grid_bpm(info->grid_bpm_tempo, info->grid_bpm_beat, g_offset);
 		});
-
-	update_gui();
 }
 
 
@@ -122,7 +133,6 @@ void reset_bpm() {
 	sync_bpm();
 	g_rate = 1.0f;
 	set_bpm(g_tempo);
-	update_gui();
 }
 
 
@@ -142,7 +152,6 @@ void CALLBACK timer_proc(HWND hwnd, UINT msg, UINT_PTR id, DWORD time) {
 	bpm_sum = 0.0;
 	bpm_count = -1;
 	sync_bpm();
-	update_gui();
 }
 
 
@@ -168,7 +177,6 @@ void measure_bpm() {
 
 	// 1.5秒後にtimer_proc()を予約する
 	bpm_timer_id = SetTimer(NULL, 0, 1500, (TIMERPROC)timer_proc);
-	update_gui();
 }
 
 
@@ -204,6 +212,12 @@ EXTERN_C __declspec(dllexport) void func_project_load(PROJECT_FILE* project) {
 }
 
 
+/// シーン変更時の関数
+EXTERN_C __declspec(dllexport) void func_scene_change(EDIT_SECTION* edit) {
+	::PostMessage(get_hwnd(), WM_PROJECT_LOAD, 0, 0);
+}
+
+
 /// プラグインDLL初期化
 EXTERN_C __declspec(dllexport) bool InitializePlugin(DWORD version) {
 	if (version < TESTED_BETA_NO) {
@@ -220,4 +234,5 @@ EXTERN_C __declspec(dllexport) void RegisterPlugin(HOST_APP_TABLE* host) {
 	edit_handle = host->create_edit_handle();
 	create_plugin_window(host, GetModuleHandle(0));
 	host->register_project_load_handler(func_project_load);
+	host->register_change_scene_handler(func_scene_change);
 }

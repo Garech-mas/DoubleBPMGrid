@@ -8,9 +8,9 @@ struct LOG_HANDLE;
 
 // プラグイン情報定数
 #define PLUGIN_NAME L"BPMグリッド倍化"
-#define PLUGIN_VERSION L"v2.00"
-#define TESTED_BETA L"beta25"
-#define TESTED_BETA_NO 2002500
+#define PLUGIN_VERSION L"v2.00a"
+#define TESTED_BETA L"beta26"
+#define TESTED_BETA_NO 2002600
 #define PLUGIN_TITLE PLUGIN_NAME " " PLUGIN_VERSION
 #define PLUGIN_INFO PLUGIN_NAME " " PLUGIN_VERSION L" (テスト済: " TESTED_BETA L") by Garech"
 
