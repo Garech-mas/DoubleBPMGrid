@@ -18,6 +18,9 @@ ZIPの中に入っている `DoubleBPMGrid.auf` を、AviUtlと同階層（ま�
 
 ## 導入方法 (AviUtl2)
 ZIPの中に入っている `DoubleBPMGrid.aux2` を、AviUtl2のプレビュー画面にドラッグ＆ドロップしてください。
+
+For non-Japanese users, please drag and drop `DoubleBPMGrid.aux2` and `English.DoubleBPMGrid.aul2` onto the AviUtl2 preview window.
+
 - 必ず最新バージョンのAviUtl2を導入してください。
 
   **必須バージョン以下の場合、プラグインが認識されない・使用できない場合があります。**
