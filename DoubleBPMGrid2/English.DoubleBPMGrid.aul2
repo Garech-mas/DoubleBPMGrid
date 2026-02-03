@@ -1,0 +1,21 @@
+[DoubleBPMGrid.aux2]
+; Plugin information
+BPMグリッド倍化=DoubleBPMGrid
+%ls %ls (テスト済: %ls) by Garech=%ls %ls (Tested on: %ls) by Garech
+%lsを動作させるためには、AviUtl2 %lsが必要です。\nAviUtl2を更新してください。=To use %ls, AviUtl2 %ls is required.\nPlease update AviUtl2.
+
+; Log
+不正なBPM(%.2f)が入力されました。(設定可能範囲: 1-1000）=Invalid BPM (%.2f) was entered. (Valid range: 1-1000)
+
+; GUI
+BPMを測定=Measure BPM
+タップし続けて測定=Keep tapping to measure
+基準：%+dF (%.3fs)=Reference: %+dF (%.3fs)
+▲ BPMを元に戻す=! Reset BPM
+BPMを2倍する=Double BPM
+BPMを半分にする=Halve BPM
+BPMを3倍する=Triple BPM
+BPMを1/3にする=Set BPM to 1/3
+グリッドの基準時間を戻す (-1F)=Move grid reference backward (-1F)
+グリッドの基準時間を進める (+1F)=Move grid reference forward (+1F)
+BPMを元に戻す=Reset BPM

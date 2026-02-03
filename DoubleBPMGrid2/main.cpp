@@ -1,12 +1,18 @@
 #include <windows.h>
 #include <cmath>
 #include <chrono>
+#include <string>
 
 #include "plugin2.h"
 #include "logger2.h"
 
 #include "main.h"
 #include "gui.h"
+#include "config2.h"
+
+static std::wstring Plugin_Name;
+static std::wstring Plugin_Title;
+static std::wstring Plugin_Info;
 
 // グローバル変数
 static float g_tempo = 120.0f; // 現在のBPM
@@ -21,6 +27,7 @@ static UINT_PTR bpm_timer_id = 0;
 
 EDIT_HANDLE* edit_handle = nullptr;
 LOG_HANDLE* logger = nullptr;
+CONFIG_HANDLE* config = nullptr;
 
 // 定数群
 static constexpr float EPSILON_ROUNDING = 1e-6; // 丸め誤差補正値
@@ -62,7 +69,7 @@ int offset_to_frame(float offset_sec, EDIT_INFO* info) {
 static bool set_bpm(float new_tempo) {
 	if (new_tempo < 1.0f || 1000.0f < new_tempo) {
 		wchar_t buf[256];
-		std::swprintf(buf, 256, L"不正なBPM(%.2f)が入力されました。(設定可能範囲: 1-1000）", new_tempo);
+		std::swprintf(buf, 256, config->translate(config, L"不正なBPM(%.2f)が入力されました。(設定可能範囲: 1-1000）"), new_tempo);
 		logger->warn(logger, buf);
 		return false;
 	}
@@ -177,6 +184,7 @@ void measure_bpm() {
 
 	// 1.5秒後にtimer_proc()を予約する
 	bpm_timer_id = SetTimer(NULL, 0, 1500, (TIMERPROC)timer_proc);
+	update_gui();
 }
 
 
@@ -205,6 +213,20 @@ EXTERN_C __declspec(dllexport) void InitializeLogger(LOG_HANDLE* handle) {
 }
 
 
+///	設定関連初期化
+EXTERN_C __declspec(dllexport) void InitializeConfig(CONFIG_HANDLE* handle) {
+	config = handle;
+
+	Plugin_Name = config->translate(config, PLUGIN_NAME);
+	Plugin_Title = Plugin_Name + L" " + PLUGIN_VERSION;
+
+	LPCWSTR info_fmt = config->translate(config, L"%ls %ls (テスト済: %ls) by Garech");
+	wchar_t info_buf[512];
+	std::swprintf(info_buf, 512, info_fmt, Plugin_Name.c_str(), PLUGIN_VERSION, TESTED_BETA);
+	Plugin_Info = info_buf;
+}
+
+
 /// プロジェクトファイルをロードした直後の関数
 EXTERN_C __declspec(dllexport) void func_project_load(PROJECT_FILE* project) {
 	// PostMessageを投げて処理してもらう (このタイミングでget_edit_info()してもうまくいかないため)
@@ -221,7 +243,9 @@ EXTERN_C __declspec(dllexport) void func_scene_change(EDIT_SECTION* edit) {
 /// プラグインDLL初期化
 EXTERN_C __declspec(dllexport) bool InitializePlugin(DWORD version) {
 	if (version < TESTED_BETA_NO) {
-		MessageBox(get_aviutl2_window(), PLUGIN_NAME L"を動作させるためには、AviUtl2 " TESTED_BETA L"が必要です。\nAviUtl2を更新してください。", PLUGIN_TITLE, MB_ICONWARNING);
+		wchar_t msg[512];
+		std::swprintf(msg, 512, config->translate(config, L"%lsを動作させるためには、AviUtl2 %lsが必要です。\nAviUtl2を更新してください。"), Plugin_Name.c_str(), TESTED_BETA);
+		MessageBox(get_aviutl2_window(), msg, Plugin_Title.c_str(), MB_ICONWARNING);
 		return false;
 	}
 	return true;
@@ -230,7 +254,7 @@ EXTERN_C __declspec(dllexport) bool InitializePlugin(DWORD version) {
 
 /// プラグイン登録
 EXTERN_C __declspec(dllexport) void RegisterPlugin(HOST_APP_TABLE* host) {
-	host->set_plugin_information(PLUGIN_INFO);
+	host->set_plugin_information(Plugin_Info.c_str());
 	edit_handle = host->create_edit_handle();
 	create_plugin_window(host, GetModuleHandle(0));
 	host->register_project_load_handler(func_project_load);

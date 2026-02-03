@@ -5,8 +5,13 @@
 
 #include "plugin2.h"
 
+#include "config2.h"
 #include "gui.h"
 #include "main.h"
+#include <string>
+#include <vector>
+
+extern CONFIG_HANDLE* config;
 
 // コントロールID
 #define IDC_STATIC_BPM_RATE       1001
@@ -47,6 +52,9 @@ constexpr int h_ui = y_6th_row + h_btn_measure + y_space_10;
 // グローバル変数
 static HWND g_hwnd = nullptr;
 static int g_scroll_pos_y = 0;
+
+// メニュー名のコンテナ
+static std::vector<std::wstring> g_registered_menu_names;
 
 // 外部参照
 extern float get_measuring_bpm();
@@ -90,7 +98,7 @@ void update_gui() {
 
 	// --- BPMラベル・BPM測定ボタンの描画 ---
 	wchar_t bpm_full[128], bpm_short[64];
-	const wchar_t* measure_btn_text = L"BPMを測定";
+	const wchar_t* measure_btn_text = config->translate(config, L"BPMを測定");
 
 	if (is_measuring()) {
 		float m_bpm = get_measuring_bpm();
@@ -98,7 +106,7 @@ void update_gui() {
 			m_bpm > 0 ? L"BPM：%.0f?" : L"BPM：????", m_bpm
 		);
 		wcscpy_s(bpm_short, bpm_full);
-		measure_btn_text = L"タップし続けて測定";
+		measure_btn_text = config->translate(config, L"タップし続けて測定");
 	}
 	else {
 		float tempo = get_tempo();
@@ -119,7 +127,7 @@ void update_gui() {
 	int current_f = offset_to_frame(get_offset(), &info);
 	float current_offset = get_offset();
 
-	_snwprintf_s(off_full, _countof(off_full), _TRUNCATE, L"基準：%+dF (%.3fs)", current_f, current_offset);
+	_snwprintf_s(off_full, _countof(off_full), _TRUNCATE, config->translate(config, L"基準：%+dF (%.3fs)"), current_f, current_offset);
 	_snwprintf_s(off_short, _countof(off_short), _TRUNCATE, L"%+dF", current_f);
 
 	int label_max_w = w - (2 * w_margin_10) - (2 * w_btn_basetime) - (2 * w_space_5);
@@ -224,9 +232,11 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 
 /// プラグインウィンドウ作成
 void create_plugin_window(HOST_APP_TABLE* host, HINSTANCE hInstance) {
+	std::wstring Plugin_Name = config->translate(config, PLUGIN_NAME);
+
 	WNDCLASSEXW wcex = {};
 	wcex.cbSize = sizeof(WNDCLASSEX);
-	wcex.lpszClassName = PLUGIN_NAME;
+	wcex.lpszClassName = Plugin_Name.c_str();
 	wcex.lpfnWndProc = wnd_proc;
 	wcex.hInstance = hInstance;
 	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
@@ -234,7 +244,7 @@ void create_plugin_window(HOST_APP_TABLE* host, HINSTANCE hInstance) {
 	if (!RegisterClassEx(&wcex)) return;
 
 	g_hwnd = CreateWindowEx(
-		0, PLUGIN_NAME, PLUGIN_NAME, WS_POPUP,
+		0, Plugin_Name.c_str(), Plugin_Name.c_str(), WS_POPUP,
 		CW_USEDEFAULT, CW_USEDEFAULT, w_ui, h_ui,
 		nullptr, nullptr, hInstance, nullptr);
 
@@ -254,31 +264,38 @@ void create_plugin_window(HOST_APP_TABLE* host, HINSTANCE hInstance) {
 	CreateChild(WC_STATICW, L"", SS_LEFT, IDC_STATIC_BASETIME);
 	CreateChild(WC_BUTTONW, L"<", BS_PUSHBUTTON, IDC_BUTTON_BASETIME_MINUS);
 	CreateChild(WC_BUTTONW, L">", BS_PUSHBUTTON, IDC_BUTTON_BASETIME_PLUS);
-	CreateChild(WC_BUTTONW, L"▲ BPMを元に戻す", BS_PUSHBUTTON, IDC_BUTTON_RESET);
-	CreateChild(WC_BUTTONW, L"BPMを測定", BS_PUSHBUTTON, IDC_BUTTON_MEASURE);
+	CreateChild(WC_BUTTONW, config->translate(config, L"▲ BPMを元に戻す"), BS_PUSHBUTTON, IDC_BUTTON_RESET);
+	CreateChild(WC_BUTTONW, config->translate(config, L"BPMを測定"), BS_PUSHBUTTON, IDC_BUTTON_MEASURE);
 
-	host->register_window_client(PLUGIN_NAME, g_hwnd);
+	host->register_window_client(Plugin_Name.c_str(), g_hwnd);
 
 	// 編集メニュー追加処理
-	host->register_edit_menu(PLUGIN_NAME L"\\BPMを2倍する", [](EDIT_SECTION* edit) {
+	g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを2倍する"));
+	host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
 		PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_MUL2, 0), 0); });
 
-	host->register_edit_menu(PLUGIN_NAME L"\\BPMを半分にする", [](EDIT_SECTION* edit) {
+	g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを半分にする"));
+	host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
 		PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_DIV2, 0), 0); });
 
-	host->register_edit_menu(PLUGIN_NAME L"\\BPMを3倍する", [](EDIT_SECTION* edit) {
+	g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを3倍する"));
+	host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
 		PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_MUL3, 0), 0); });
 
-	host->register_edit_menu(PLUGIN_NAME L"\\BPMを1/3にする", [](EDIT_SECTION* edit) {
+	g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを1/3にする"));
+	host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
 		PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_DIV3, 0), 0); });
 
-	host->register_edit_menu(PLUGIN_NAME L"\\グリッドの基準時間を戻す (-1F)", [](EDIT_SECTION* edit) {
+	g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"グリッドの基準時間を戻す (-1F)"));
+	host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
 		PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_BASETIME_MINUS, 0), 0); });
 
-	host->register_edit_menu(PLUGIN_NAME L"\\グリッドの基準時間を進める (+1F)", [](EDIT_SECTION* edit) {
+	g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"グリッドの基準時間を進める (+1F)"));
+	host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
 		PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_BASETIME_PLUS, 0), 0); });
 
-	host->register_edit_menu(PLUGIN_NAME L"\\BPMを元に戻す", [](EDIT_SECTION* edit) {
+	g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを元に戻す"));
+	host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
 		PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_RESET, 0), 0); });
 
 }
