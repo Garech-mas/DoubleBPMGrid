@@ -13,4 +13,4 @@ HWND get_hwnd();
 
 // 操作
 void create_plugin_window(HOST_APP_TABLE* host, HINSTANCE hInstance);
-void update_gui();
+void update_gui(EDIT_INFO* info = nullptr);

@@ -227,16 +227,10 @@ EXTERN_C __declspec(dllexport) void InitializeConfig(CONFIG_HANDLE* handle) {
 }
 
 
-/// プロジェクトファイルをロードした直後の関数
-EXTERN_C __declspec(dllexport) void func_project_load(PROJECT_FILE* project) {
-	// PostMessageを投げて処理してもらう (このタイミングでget_edit_info()してもうまくいかないため)
-	::PostMessage(get_hwnd(), WM_PROJECT_LOAD, 0, 0);
-}
-
-
 /// シーン変更時の関数
 EXTERN_C __declspec(dllexport) void func_scene_change(EDIT_SECTION* edit) {
-	::PostMessage(get_hwnd(), WM_PROJECT_LOAD, 0, 0);
+	sync_bpm();
+	update_gui(edit->info);
 }
 
 
@@ -257,6 +251,5 @@ EXTERN_C __declspec(dllexport) void RegisterPlugin(HOST_APP_TABLE* host) {
 	host->set_plugin_information(Plugin_Info.c_str());
 	edit_handle = host->create_edit_handle();
 	create_plugin_window(host, GetModuleHandle(0));
-	host->register_project_load_handler(func_project_load);
 	host->register_change_scene_handler(func_scene_change);
 }

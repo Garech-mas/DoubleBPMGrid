@@ -85,12 +85,14 @@ static float get_gui_rate() {
 
 
 /// GUIの各種値を最新の状態にする
-void update_gui() {
-	if (!g_hwnd) return;
-	EDIT_HANDLE* edit = get_edit_handle();
-
-	EDIT_INFO info;
-	edit->get_edit_info(&info, sizeof(EDIT_INFO));
+void update_gui(EDIT_INFO* info) {
+    if (!g_hwnd) return;
+    EDIT_INFO local_info;
+    if (info == nullptr) {
+        EDIT_HANDLE* edit = get_edit_handle();
+        edit->get_edit_info(&local_info, sizeof(EDIT_INFO));
+        info = &local_info;
+    }
 
 	RECT rc;
 	GetClientRect(g_hwnd, &rc);
@@ -102,7 +104,7 @@ void update_gui() {
 
 	if (is_measuring()) {
 		float m_bpm = get_measuring_bpm();
-		_snwprintf_s(bpm_full, _countof(bpm_full), _TRUNCATE, 
+		_snwprintf_s(bpm_full, _countof(bpm_full), _TRUNCATE,
 			m_bpm > 0 ? L"BPM：%.0f?" : L"BPM：????", m_bpm
 		);
 		wcscpy_s(bpm_short, bpm_full);
@@ -114,7 +116,7 @@ void update_gui() {
 		float current = tempo * rate;
 
 		_snwprintf_s(bpm_full, _countof(bpm_full), _TRUNCATE, L"BPM：%.2f × %.2f = %.2f", tempo, rate, current);
-		_snwprintf_s(bpm_short, _countof(bpm_short), _TRUNCATE, 
+		_snwprintf_s(bpm_short, _countof(bpm_short), _TRUNCATE,
 			rate != 1.0f ? L"BPM：%.1f *" : L"BPM：%.1f", current
 		);
 	}
@@ -124,7 +126,7 @@ void update_gui() {
 
 	// --- 基準時間ラベルの描画 ---
 	wchar_t off_full[128], off_short[64];
-	int current_f = offset_to_frame(get_offset(), &info);
+	int current_f = offset_to_frame(get_offset(), info);
 	float current_offset = get_offset();
 
 	_snwprintf_s(off_full, _countof(off_full), _TRUNCATE, config->translate(config, L"基準：%+dF (%.3fs)"), current_f, current_offset);
@@ -184,7 +186,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 
 		// --- 倍率変更ボタンの描画 ---
 		constexpr int w_edit_rate_input = 80;
-		const int w_btn_input = ( w_window - 2 * w_margin_10 - 2 * w_space_5 - w_edit_rate_input ) / 2;
+		const int w_btn_input = (w_window - 2 * w_margin_10 - 2 * w_space_5 - w_edit_rate_input) / 2;
 		DeferPos(IDC_BUTTON_MUL_INPUT, w_margin_10, y_2nd_row, w_btn_input, h_btn);
 		DeferPos(IDC_EDIT_RATE_INPUT, w_margin_10 + w_btn_input + w_space_5, y_2nd_row, 80, h_btn);
 		DeferPos(IDC_BUTTON_DIV_INPUT, w_window - w_margin_10 - w_btn_input, y_2nd_row, w_btn_input, h_btn);
@@ -195,7 +197,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 		hdwp = DeferWindowPos(hdwp, GetDlgItem(hwnd, IDC_BUTTON_MUL2), NULL, w_margin_10 + w_btn_n + w_space_5, y_3rd_row - g_scroll_pos_y, w_btn_n, h_btn, SWP_NOZORDER | SWP_NOACTIVATE);
 		hdwp = DeferWindowPos(hdwp, GetDlgItem(hwnd, IDC_BUTTON_DIV2), NULL, w_margin_10 + 2 * (w_btn_n + w_space_5), y_3rd_row - g_scroll_pos_y, w_btn_n, h_btn, SWP_NOZORDER | SWP_NOACTIVATE);
 		hdwp = DeferWindowPos(hdwp, GetDlgItem(hwnd, IDC_BUTTON_DIV3), NULL, w_margin_10 + 3 * (w_btn_n + w_space_5), y_3rd_row - g_scroll_pos_y, w_btn_n, h_btn, SWP_NOZORDER | SWP_NOACTIVATE);
-		
+
 		// --- 基準時間変更ボタンの描画 ---
 		const int w_label_basetime = w_window - 2 * w_margin_10 - 2 * w_btn_basetime - 2 * w_space_5;
 		DeferPos(IDC_STATIC_BASETIME, w_margin_10, y_4th_row, w_label_basetime, h_label);
@@ -215,87 +217,80 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 			InvalidateRect(hwnd, NULL, FALSE);
 			UpdateWindow(hwnd);
 		}
-
 		return 0;
 	}
-
-	case WM_PROJECT_LOAD:
-		// func_project_load() 完了後に呼ばれる（この地点でEDIT_INFOを初期化しないとダメ）
-		sync_bpm();
-		update_gui();
-		return 0;
 	}
-	
+
 	// 残りのウィンドウメッセージはAviUtl2に送る
 	return DefWindowProc(hwnd, message, wparam, lparam);
-}
+	}
 
-/// プラグインウィンドウ作成
-void create_plugin_window(HOST_APP_TABLE* host, HINSTANCE hInstance) {
-	std::wstring Plugin_Name = config->translate(config, PLUGIN_NAME);
+	/// プラグインウィンドウ作成
+	void create_plugin_window(HOST_APP_TABLE* host, HINSTANCE hInstance) {
+		std::wstring Plugin_Name = config->translate(config, PLUGIN_NAME);
 
-	WNDCLASSEXW wcex = {};
-	wcex.cbSize = sizeof(WNDCLASSEX);
-	wcex.lpszClassName = Plugin_Name.c_str();
-	wcex.lpfnWndProc = wnd_proc;
-	wcex.hInstance = hInstance;
-	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-	wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
-	if (!RegisterClassEx(&wcex)) return;
+		WNDCLASSEXW wcex = {};
+		wcex.cbSize = sizeof(WNDCLASSEX);
+		wcex.lpszClassName = Plugin_Name.c_str();
+		wcex.lpfnWndProc = wnd_proc;
+		wcex.hInstance = hInstance;
+		wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+		wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
+		if (!RegisterClassEx(&wcex)) return;
 
-	g_hwnd = CreateWindowEx(
-		0, Plugin_Name.c_str(), Plugin_Name.c_str(), WS_POPUP,
-		CW_USEDEFAULT, CW_USEDEFAULT, w_ui, h_ui,
-		nullptr, nullptr, hInstance, nullptr);
+		g_hwnd = CreateWindowEx(
+			0, Plugin_Name.c_str(), Plugin_Name.c_str(), WS_POPUP,
+			CW_USEDEFAULT, CW_USEDEFAULT, w_ui, h_ui,
+			nullptr, nullptr, hInstance, nullptr);
 
-	auto CreateChild = [&](const wchar_t* cls, const wchar_t* txt, DWORD style, int id) {
-		CreateWindowEx(0, cls, txt, WS_VISIBLE | WS_CHILD | style, 0, 0, 0, 0, g_hwnd, (HMENU)(INT_PTR)id, hInstance, nullptr);
-		};
+		auto CreateChild = [&](const wchar_t* cls, const wchar_t* txt, DWORD style, int id) {
+			CreateWindowEx(0, cls, txt, WS_VISIBLE | WS_CHILD | style, 0, 0, 0, 0, g_hwnd, (HMENU)(INT_PTR)id, hInstance, nullptr);
+			};
 
-	// コントロール作成処理（とりあえず作成だけして、WM_SIZE内で再調整）
-	CreateChild(WC_STATICW, L"", SS_CENTER, IDC_STATIC_BPM_RATE);
-	CreateChild(WC_BUTTONW, L"×", BS_PUSHBUTTON, IDC_BUTTON_MUL_INPUT);
-	CreateChild(WC_EDITW, L"2.00", WS_BORDER | ES_CENTER, IDC_EDIT_RATE_INPUT);
-	CreateChild(WC_BUTTONW, L"÷", BS_PUSHBUTTON, IDC_BUTTON_DIV_INPUT);
-	CreateChild(WC_BUTTONW, L"×3", BS_PUSHBUTTON, IDC_BUTTON_MUL3);
-	CreateChild(WC_BUTTONW, L"×2", BS_PUSHBUTTON, IDC_BUTTON_MUL2);
-	CreateChild(WC_BUTTONW, L"÷2", BS_PUSHBUTTON, IDC_BUTTON_DIV2);
-	CreateChild(WC_BUTTONW, L"÷3", BS_PUSHBUTTON, IDC_BUTTON_DIV3);
-	CreateChild(WC_STATICW, L"", SS_LEFT, IDC_STATIC_BASETIME);
-	CreateChild(WC_BUTTONW, L"<", BS_PUSHBUTTON, IDC_BUTTON_BASETIME_MINUS);
-	CreateChild(WC_BUTTONW, L">", BS_PUSHBUTTON, IDC_BUTTON_BASETIME_PLUS);
-	CreateChild(WC_BUTTONW, config->translate(config, L"▲ BPMを元に戻す"), BS_PUSHBUTTON, IDC_BUTTON_RESET);
-	CreateChild(WC_BUTTONW, config->translate(config, L"BPMを測定"), BS_PUSHBUTTON, IDC_BUTTON_MEASURE);
+		// コントロール作成処理（とりあえず作成だけして、WM_SIZE内で再調整）
+		CreateChild(WC_STATICW, L"", SS_CENTER, IDC_STATIC_BPM_RATE);
+		CreateChild(WC_BUTTONW, L"×", BS_PUSHBUTTON, IDC_BUTTON_MUL_INPUT);
+		CreateChild(WC_EDITW, L"2.00", WS_BORDER | ES_CENTER, IDC_EDIT_RATE_INPUT);
+		CreateChild(WC_BUTTONW, L"÷", BS_PUSHBUTTON, IDC_BUTTON_DIV_INPUT);
+		CreateChild(WC_BUTTONW, L"×3", BS_PUSHBUTTON, IDC_BUTTON_MUL3);
+		CreateChild(WC_BUTTONW, L"×2", BS_PUSHBUTTON, IDC_BUTTON_MUL2);
+		CreateChild(WC_BUTTONW, L"÷2", BS_PUSHBUTTON, IDC_BUTTON_DIV2);
+		CreateChild(WC_BUTTONW, L"÷3", BS_PUSHBUTTON, IDC_BUTTON_DIV3);
+		CreateChild(WC_STATICW, L"", SS_LEFT, IDC_STATIC_BASETIME);
+		CreateChild(WC_BUTTONW, L"<", BS_PUSHBUTTON, IDC_BUTTON_BASETIME_MINUS);
+		CreateChild(WC_BUTTONW, L">", BS_PUSHBUTTON, IDC_BUTTON_BASETIME_PLUS);
+		CreateChild(WC_BUTTONW, config->translate(config, L"▲ BPMを元に戻す"), BS_PUSHBUTTON, IDC_BUTTON_RESET);
+		CreateChild(WC_BUTTONW, config->translate(config, L"BPMを測定"), BS_PUSHBUTTON, IDC_BUTTON_MEASURE);
 
-	host->register_window_client(Plugin_Name.c_str(), g_hwnd);
+		host->register_window_client(Plugin_Name.c_str(), g_hwnd);
 
-	// 編集メニュー追加処理
-	g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを2倍する"));
-	host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
-		PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_MUL2, 0), 0); });
+		// 編集メニュー追加処理
+		g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを2倍する"));
+		host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
+			PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_MUL2, 0), 0); });
 
-	g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを半分にする"));
-	host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
-		PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_DIV2, 0), 0); });
+		g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを半分にする"));
+		host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
+			PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_DIV2, 0), 0); });
 
-	g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを3倍する"));
-	host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
-		PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_MUL3, 0), 0); });
+		g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを3倍する"));
+		host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
+			PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_MUL3, 0), 0); });
 
-	g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを1/3にする"));
-	host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
-		PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_DIV3, 0), 0); });
+		g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを1/3にする"));
+		host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
+			PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_DIV3, 0), 0); });
 
-	g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"グリッドの基準時間を戻す (-1F)"));
-	host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
-		PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_BASETIME_MINUS, 0), 0); });
+		g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"グリッドの基準時間を戻す (-1F)"));
+		host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
+			PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_BASETIME_MINUS, 0), 0); });
 
-	g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"グリッドの基準時間を進める (+1F)"));
-	host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
-		PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_BASETIME_PLUS, 0), 0); });
+		g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"グリッドの基準時間を進める (+1F)"));
+		host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
+			PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_BASETIME_PLUS, 0), 0); });
 
-	g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを元に戻す"));
-	host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
-		PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_RESET, 0), 0); });
+		g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを元に戻す"));
+		host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
+			PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_RESET, 0), 0); });
 
-}
+	}
