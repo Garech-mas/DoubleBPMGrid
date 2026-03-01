@@ -8,9 +8,9 @@ struct LOG_HANDLE;
 
 // プラグイン情報定数
 #define PLUGIN_NAME L"BPMグリッド倍化"
-#define PLUGIN_VERSION L"v2.2"
-#define TESTED_BETA L"beta31"
-#define TESTED_BETA_NO 2003100
+#define PLUGIN_VERSION L"v2.3"
+#define TESTED_BETA L"beta35"
+#define TESTED_BETA_NO 2003500
 
 // アクセサ
 EDIT_HANDLE* get_edit_handle();

@@ -38,6 +38,7 @@ static std::unordered_map<UINT_PTR, int> g_timer_to_scene; // timer_id -> scene_
 EDIT_HANDLE* edit_handle = nullptr;
 LOG_HANDLE* logger = nullptr;
 CONFIG_HANDLE* config = nullptr;
+COMMON_PLUGIN_TABLE common_plugin_table;
 
 // 定数群
 static constexpr float EPSILON_ROUNDING = 1e-6f; // 丸め誤差補正値
@@ -286,25 +287,6 @@ void measure_bpm() {
 }
 
 
-/// AviUtl2 のメインウィンドウを取得する
-HWND get_aviutl2_window() {
-    const std::wstring className = L"aviutl2Manager";
-    DWORD currentPid = GetCurrentProcessId();
-    HWND hWnd = nullptr;
-
-    while ((hWnd = FindWindowExW(nullptr, hWnd, className.c_str(), nullptr)) != nullptr) {
-        DWORD windowPid = 0;
-        GetWindowThreadProcessId(hWnd, &windowPid);
-
-        if (windowPid == currentPid) {
-            return hWnd; // 最初に見つかったものを返す
-        }
-    }
-
-    return nullptr; // 見つからなかった場合
-}
-
-
 ///	ログ出力機能初期化
 EXTERN_C __declspec(dllexport) void InitializeLogger(LOG_HANDLE* handle) {
     logger = handle;
@@ -322,6 +304,8 @@ EXTERN_C __declspec(dllexport) void InitializeConfig(CONFIG_HANDLE* handle) {
     wchar_t info_buf[512];
     std::swprintf(info_buf, 512, info_fmt, Plugin_Name.c_str(), PLUGIN_VERSION, TESTED_BETA);
     Plugin_Info = info_buf;
+
+    common_plugin_table = { Plugin_Name.c_str(), Plugin_Info.c_str() };
 }
 
 
@@ -354,21 +338,20 @@ EXTERN_C __declspec(dllexport) void func_scene_change(EDIT_SECTION* edit) {
 }
 
 
-/// プラグインDLL初期化
-EXTERN_C __declspec(dllexport) bool InitializePlugin(DWORD version) {
-    if (version < TESTED_BETA_NO) {
-        wchar_t msg[512];
-        std::swprintf(msg, 512, config->translate(config, L"%lsを動作させるためには、AviUtl2 %lsが必要です。\nAviUtl2を更新してください。"), Plugin_Name.c_str(), TESTED_BETA);
-        MessageBox(get_aviutl2_window(), msg, Plugin_Title.c_str(), MB_ICONWARNING);
-        return false;
-    }
-    return true;
+/// 必須バージョン番号を渡す
+EXTERN_C __declspec(dllexport) DWORD RequiredVersion() {
+    return TESTED_BETA_NO;
+}
+
+
+///	汎用プラグイン構造体のポインタを渡す
+EXTERN_C __declspec(dllexport) COMMON_PLUGIN_TABLE* GetCommonPluginTable(void) {
+    return &common_plugin_table;
 }
 
 
 /// プラグイン登録
 EXTERN_C __declspec(dllexport) void RegisterPlugin(HOST_APP_TABLE* host) {
-    host->set_plugin_information(Plugin_Info.c_str());
     edit_handle = host->create_edit_handle();
     create_plugin_window(host, GetModuleHandle(0));
     host->register_change_scene_handler(func_scene_change);
