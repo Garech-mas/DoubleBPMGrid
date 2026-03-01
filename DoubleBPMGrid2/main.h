@@ -18,6 +18,7 @@ LOG_HANDLE* get_logger();
 float get_tempo();
 float get_rate();
 float get_offset();
+int get_beat();
 bool is_measuring();
 
 // 変換

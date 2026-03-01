@@ -14,10 +14,15 @@ static std::wstring Plugin_Name;
 static std::wstring Plugin_Title;
 static std::wstring Plugin_Info;
 
-// グローバル変数
-static float g_tempo = 120.0f; // 現在のBPM
-static float g_rate = 1.0f;    // 現在の倍率
-static float g_offset = 0.0f;  // 現在の基準位置
+// シーン情報のグローバル変数
+struct GlobalState {
+    float tempo;   // 現在のBPM
+    float rate;    // 現在の倍率
+    float offset;  // 現在の基準位置 (秒)
+    int beat; // 現在の拍
+};
+
+static GlobalState gstate = { 120.0f, 1.0f, 0.0f, 0 };
 
 // BPM測定用
 static std::chrono::steady_clock::time_point last_tap_time;
@@ -34,9 +39,10 @@ static constexpr float EPSILON_ROUNDING = 1e-6; // 丸め誤差補正値
 static constexpr double EPSILON_FRAME = 1e-12;
 
 // アクセサ
-float get_tempo() { return g_tempo; }
-float get_rate() { return g_rate; }
-float get_offset() { return g_offset; }
+float get_tempo() { return gstate.tempo; }
+float get_rate() { return gstate.rate; }
+float get_offset() { return gstate.offset; }
+int get_beat() { return gstate.beat; }
 bool is_measuring() { return bpm_count >= 0; }
 float get_measuring_bpm() { return (bpm_count > 1) ? (float)(bpm_sum / (bpm_count - 1)) : 0.0f; }
 
@@ -74,12 +80,13 @@ static bool set_bpm(float new_tempo) {
 		return false;
 	}
 
-	edit_handle->call_edit_section_param(
-		(void*)&new_tempo,
-		[](void* new_tempo, EDIT_SECTION* edit) {
-			edit->set_grid_bpm(*(float*)new_tempo, edit->info->grid_bpm_beat, edit->info->grid_bpm_offset);
-		}
-	);
+    edit_handle->call_edit_section_param(
+        (void*)&new_tempo,
+        [](void* new_tempo, EDIT_SECTION* edit) {
+            int new_beat = static_cast<int>(std::ceil(static_cast<double>(gstate.beat) * gstate.rate));
+            edit->set_grid_bpm(*(float*)new_tempo, new_beat, edit->info->grid_bpm_offset);
+        }
+    );
 	return true;
 }
 
@@ -90,28 +97,39 @@ void sync_bpm() {
 	EDIT_INFO info;
 	edit_handle->get_edit_info(&info, sizeof(EDIT_INFO));
 
-	float actual_bpm = info.grid_bpm_tempo;
-	float calculated_bpm = g_tempo * g_rate;
+    float actual_bpm = info.grid_bpm_tempo;
+    float calculated_bpm = gstate.tempo * gstate.rate;
+    // beat は gstate.beat に gstate.rate を掛けて切り上げた値
+    int calculated_beat = static_cast<int>(std::ceil(static_cast<double>(gstate.beat) * gstate.rate));
 
-	if (fabs(actual_bpm - calculated_bpm) > EPSILON_ROUNDING) {
-		g_tempo = actual_bpm;
-		g_offset = (float)info.grid_bpm_offset;
-		g_rate = 1.0f;
-	}
-	else if (fabs((float)info.grid_bpm_offset - g_offset) > EPSILON_ROUNDING) {
-		g_offset = (float)info.grid_bpm_offset;
-	}
+    if (fabs(actual_bpm - calculated_bpm) > EPSILON_ROUNDING) {
+        gstate.tempo = actual_bpm;
+        gstate.offset = (float)info.grid_bpm_offset;
+		gstate.beat = info.grid_bpm_beat;
+        gstate.rate = 1.0f;
+    }
+    else {
+        // 基準位置が変更された場合
+        if (fabs((float)info.grid_bpm_offset - gstate.offset) > EPSILON_ROUNDING) {
+            gstate.offset = (float)info.grid_bpm_offset;
+        }
+
+        // 拍が変更された場合
+        if (info.grid_bpm_beat != calculated_beat) {
+            gstate.beat = info.grid_bpm_beat;
+        }
+    }
 }
 
 /// BPMを倍にする
 void multiply_bpm(float new_rate) {
-	sync_bpm();
-	float before_rate = g_rate;
-	g_rate *= new_rate;
+    sync_bpm();
+    float before_rate = gstate.rate;
+    gstate.rate *= new_rate;
 
-	if (!set_bpm(g_tempo * g_rate)) {
-		g_rate = before_rate;
-	}
+    if (!set_bpm(gstate.tempo * gstate.rate)) {
+        gstate.rate = before_rate;
+    }
 }
 
 
@@ -127,10 +145,10 @@ void shift_grid(int dir) {
 		int current_f = offset_to_frame((float)edit->info->grid_bpm_offset, info);
 		int next_f = current_f + dir;
 
-		// フレーム番号をそのまま秒に変換
-		g_offset = (float)next_f * info->scale / info->rate;
+        // フレーム番号をそのまま秒に変換
+        gstate.offset = (float)next_f * info->scale / info->rate;
 
-		edit->set_grid_bpm(info->grid_bpm_tempo, info->grid_bpm_beat, g_offset);
+        edit->set_grid_bpm(info->grid_bpm_tempo, info->grid_bpm_beat, gstate.offset);
 		});
 }
 
@@ -138,8 +156,8 @@ void shift_grid(int dir) {
 /// BPMを元に戻す
 void reset_bpm() {
 	sync_bpm();
-	g_rate = 1.0f;
-	set_bpm(g_tempo);
+    gstate.rate = 1.0f;
+    set_bpm(gstate.tempo);
 }
 
 
