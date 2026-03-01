@@ -29,7 +29,7 @@ void multiply_bpm(float new_rate);
 void shift_grid(int direction);
 void reset_bpm();
 void measure_bpm();
-void sync_bpm(); 
+void sync_bpm(EDIT_INFO* info = nullptr);
 
 // タイマーコールバック (main.cppで実装)
 void CALLBACK timer_proc(HWND hwnd, UINT msg, UINT_PTR id, DWORD time);
