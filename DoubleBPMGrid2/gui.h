@@ -1,6 +1,7 @@
 #pragma once
 
 #include <windows.h>
+#include "plugin2.h"
 
 // 前方宣言
 struct HOST_APP_TABLE;

@@ -3,9 +3,6 @@
 #include <chrono>
 #include <string>
 
-#include "plugin2.h"
-#include "logger2.h"
-
 #include "main.h"
 #include "gui.h"
 #include "config2.h"

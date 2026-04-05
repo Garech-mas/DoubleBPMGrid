@@ -3,8 +3,6 @@
 #include <cstdio>
 #include <cmath>
 
-#include "plugin2.h"
-
 #include "config2.h"
 #include "gui.h"
 #include "main.h"
@@ -52,17 +50,27 @@ constexpr int h_ui = y_6th_row + h_btn_measure + y_space_10;
 // グローバル変数
 static HWND g_hwnd = nullptr;
 static int g_scroll_pos_y = 0;
+static std::wstring g_bpm_full_text;
+static std::wstring g_bpm_short_text;
+static std::wstring g_measure_button_text;
+static std::wstring g_offset_full_text;
+static std::wstring g_offset_short_text;
 
 // メニュー名のコンテナ
 static std::vector<std::wstring> g_registered_menu_names;
 
-// 外部参照
-extern float get_measuring_bpm();
+static void apply_cached_gui_texts() {
+	if (!g_hwnd) return;
 
+	RECT rc;
+	GetClientRect(g_hwnd, &rc);
+	int w = rc.right;
 
-/// ウィンドウの横幅(width)が閾値(threshold)以上かどうかで、full_text / short_text を返す
-static const wchar_t* select_text_by_width(int width, int threshold, const wchar_t* full_text, const wchar_t* short_text) {
-	return (width < threshold) ? short_text : full_text;
+	SetWindowTextW(GetDlgItem(g_hwnd, IDC_BUTTON_MEASURE), g_measure_button_text.c_str());
+	SetWindowTextW(GetDlgItem(g_hwnd, IDC_STATIC_BPM_RATE), (w < 180) ? g_bpm_short_text.c_str() : g_bpm_full_text.c_str());
+
+	int label_max_w = w - (2 * w_margin_10) - (2 * w_btn_basetime) - (2 * w_space_5);
+	SetWindowTextW(GetDlgItem(g_hwnd, IDC_STATIC_BASETIME), (label_max_w < 90) ? g_offset_short_text.c_str() : g_offset_full_text.c_str());
 }
 
 
@@ -94,10 +102,6 @@ void update_gui(EDIT_INFO* info) {
         info = &local_info;
     }
 
-	RECT rc;
-	GetClientRect(g_hwnd, &rc);
-	int w = rc.right;
-
 	// --- BPMラベル・BPM測定ボタンの描画 ---
 	wchar_t bpm_full[128], bpm_short[64];
 	const wchar_t* measure_btn_text = config->translate(config, L"BPMを測定");
@@ -121,19 +125,22 @@ void update_gui(EDIT_INFO* info) {
 		);
 	}
 
-	SetWindowTextW(GetDlgItem(g_hwnd, IDC_BUTTON_MEASURE), measure_btn_text);
-	SetWindowTextW(GetDlgItem(g_hwnd, IDC_STATIC_BPM_RATE), (w < 180) ? bpm_short : bpm_full);
+	g_measure_button_text = measure_btn_text;
+	g_bpm_full_text = bpm_full;
+	g_bpm_short_text = bpm_short;
 
 	// --- 基準時間ラベルの描画 ---
 	wchar_t off_full[128], off_short[64];
-	int current_f = offset_to_frame(get_offset(), info);
 	float current_offset = get_offset();
+	int current_f = offset_to_frame(current_offset, info);
 
 	_snwprintf_s(off_full, _countof(off_full), _TRUNCATE, config->translate(config, L"基準：%+dF (%.3fs)"), current_f, current_offset);
 	_snwprintf_s(off_short, _countof(off_short), _TRUNCATE, L"%+dF", current_f);
 
-	int label_max_w = w - (2 * w_margin_10) - (2 * w_btn_basetime) - (2 * w_space_5);
-	SetWindowTextW(GetDlgItem(g_hwnd, IDC_STATIC_BASETIME), (label_max_w < 90) ? off_short : off_full);
+	g_offset_full_text = off_full;
+	g_offset_short_text = off_short;
+
+	apply_cached_gui_texts();
 }
 
 
@@ -158,7 +165,6 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 	case WM_MOUSEWHEEL:
 	{
 		const int delta = GET_WHEEL_DELTA_WPARAM(wparam);
-		const int scroll_amount = (delta / WHEEL_DELTA) * 3 * 10;
 		RECT rc;
 		GetClientRect(hwnd, &rc);
 
@@ -175,7 +181,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 		const int h_window = HIWORD(lparam);
 		g_scroll_pos_y = (h_window >= h_ui) ? 0 : min(g_scroll_pos_y, h_ui - h_window);
 
-		HDWP hdwp = BeginDeferWindowPos(11);
+		HDWP hdwp = BeginDeferWindowPos(13);
 		auto DeferPos = [&](int id, int x, int y, int w, int h) {
 			hdwp = DeferWindowPos(hdwp, GetDlgItem(hwnd, id), NULL, x, y - g_scroll_pos_y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
 			};
@@ -210,7 +216,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 
 		// GUIの更新・再描画
 		EndDeferWindowPos(hdwp);
-		update_gui();
+		apply_cached_gui_texts();
 
 		// スクロール位置が変わった場合は再描画
 		if (wparam != 1) {
