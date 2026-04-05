@@ -61,7 +61,7 @@ float get_rate() { return get_scene_state_for_info(nullptr).grid.rate; }
 float get_offset() { return get_scene_state_for_info(nullptr).grid.offset; }
 int get_beat() { return get_scene_state_for_info(nullptr).grid.beat; }
 bool is_measuring() { return get_scene_state_for_info(nullptr).bpm_count >= 0; }
-float get_measuring_bpm() { auto& s = get_scene_state_for_info(nullptr); return (s.bpm_count > 1) ? (float)(s.bpm_sum / (s.bpm_count - 1)) : 0.0f; }
+float get_measuring_bpm() { auto& s = get_scene_state_for_info(nullptr); return (s.bpm_count > 1) ? (float)(s.bpm_sum / s.bpm_count) : 0.0f; }
 
 EDIT_HANDLE* get_edit_handle() { return edit_handle; }
 LOG_HANDLE* get_logger() { return logger; }
@@ -228,7 +228,7 @@ void CALLBACK timer_proc(HWND hwnd, UINT msg, UINT_PTR id, DWORD time) {
         }
 
         if (apply_bpm) {
-            float average_bpm = (float)std::round(ss.bpm_sum / (ss.bpm_count - 1));
+            float average_bpm = (float)std::round(ss.bpm_sum / ss.bpm_count);
 
             // BPMセット前に初期化
             ss.bpm_sum = 0.0;
@@ -243,6 +243,7 @@ void CALLBACK timer_proc(HWND hwnd, UINT msg, UINT_PTR id, DWORD time) {
         ss.bpm_sum = 0.0;
         ss.bpm_count = -1;
         sync_bpm();
+        update_gui();
     }
 }
 
@@ -266,14 +267,15 @@ void measure_bpm() {
 
     ss.last_tap_time = now;
 
-    // 最初の1回目は無視、2回目から計測する
-    if (ss.bpm_count <= 0) {
+    // 最初の1回目は基準時刻だけ記録し、2回目から区間を加算する
+    if (ss.bpm_count < 0) {
+        ss.bpm_count = 0;
         ss.bpm_sum = 0.0;
     }
     else {
         ss.bpm_sum += (60.0 / seconds);
+        ss.bpm_count++;
     }
-    ss.bpm_count++;
 
     // 1.5秒後にtimer_proc()を予約する
     ss.bpm_timer_id = SetTimer(NULL, 0, 1500, (TIMERPROC)timer_proc);
