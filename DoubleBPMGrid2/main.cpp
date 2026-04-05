@@ -258,12 +258,13 @@ void measure_bpm() {
     std::chrono::duration<double> elapsed = now - ss.last_tap_time;
     double seconds = elapsed.count();
 
+    if (seconds <= 0.1) return; // チャタリング防止
+
     if (ss.bpm_timer_id != 0) KillTimer(NULL, ss.bpm_timer_id); // 予約タイマー停止
     // 既にマッピングがあれば削除
     if (ss.bpm_timer_id != 0) {
         g_timer_to_scene.erase(ss.bpm_timer_id);
     }
-    if (seconds <= 0.1) return; // チャタリング防止
 
     ss.last_tap_time = now;
 
