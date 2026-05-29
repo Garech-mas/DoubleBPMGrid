@@ -6,9 +6,9 @@
 
 // プラグイン情報定数
 #define PLUGIN_NAME L"BPMグリッド倍化"
-#define PLUGIN_VERSION L"v2.4"
-#define TESTED_BETA L"beta40a"
-#define TESTED_BETA_NO 2004001
+#define PLUGIN_VERSION L"v2.5"
+#define TESTED_BETA L"beta47"
+#define TESTED_BETA_NO 2004700
 
 // アクセサ
 EDIT_HANDLE* get_edit_handle();

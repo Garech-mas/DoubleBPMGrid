@@ -300,3 +300,21 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 			PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_RESET, 0), 0); });
 
 	}
+
+
+/// プラグインウィンドウの後始末 ※beta47以降のクラッシュ対策
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved) {
+	switch (ul_reason_for_call) {
+	case DLL_PROCESS_DETACH:
+	{
+		if (lpReserved != nullptr)
+			break;
+		if (g_hwnd)
+			DestroyWindow(g_hwnd);
+
+		break;
+	}
+	}
+
+	return TRUE;
+}
