@@ -46,6 +46,8 @@ constexpr int y_6th_row = y_5th_row + h_btn + y_space_5;
 
 constexpr int w_ui = 260;
 constexpr int h_ui = y_6th_row + h_btn_measure + y_space_10;
+constexpr UINT_PTR timer_id_mouse_watch = 1;
+constexpr UINT timer_interval_mouse_watch = 50;
 
 // グローバル変数
 static HWND g_hwnd = nullptr;
@@ -55,10 +57,42 @@ static std::wstring g_bpm_short_text;
 static std::wstring g_measure_button_text;
 static std::wstring g_offset_full_text;
 static std::wstring g_offset_short_text;
+static bool g_mouse_inside_window = false;
+static bool g_key_down[256] = {};
 
 // メニュー名のコンテナ
 static std::vector<std::wstring> g_registered_menu_names;
 
+/// マウスカーソルがプラグインウィンドウ内にあるかを返す
+static bool is_cursor_in_plugin_window() {
+	if (!g_hwnd) return false;
+
+	POINT pt;
+	if (!GetCursorPos(&pt)) return false;
+
+	HWND hwnd_under_cursor = WindowFromPoint(pt);
+	return hwnd_under_cursor == g_hwnd || IsChild(g_hwnd, hwnd_under_cursor);
+}
+
+/// マウスがプラグインウィンドウへ入った時だけ表示を更新する
+static void update_gui_on_mouse_enter() {
+	if (g_mouse_inside_window) return;
+
+	g_mouse_inside_window = true;
+	ZeroMemory(g_key_down, sizeof(g_key_down));
+	SetTimer(g_hwnd, timer_id_mouse_watch, timer_interval_mouse_watch, nullptr);
+	update_gui();
+}
+
+/// マウスがプラグインウィンドウから出たことを検知する
+static void check_mouse_leave() {
+	if (!g_mouse_inside_window || is_cursor_in_plugin_window()) return;
+
+	g_mouse_inside_window = false;
+	KillTimer(g_hwnd, timer_id_mouse_watch);
+}
+
+/// キャッシュ済みの文字列を現在のウィンドウ幅に合わせて反映する
 static void apply_cached_gui_texts() {
 	if (!g_hwnd) return;
 
@@ -95,6 +129,8 @@ static float get_gui_rate() {
 /// GUIの各種値を最新の状態にする
 void update_gui(EDIT_INFO* info) {
     if (!g_hwnd) return;
+
+    // 呼び出し元から編集情報が渡されていない場合は、現在の編集情報を取得する
     EDIT_INFO local_info;
     if (info == nullptr) {
         EDIT_HANDLE* edit = get_edit_handle();
@@ -115,8 +151,8 @@ void update_gui(EDIT_INFO* info) {
 		measure_btn_text = config->translate(config, L"タップし続けて測定");
 	}
 	else {
-		float tempo = get_tempo();
-		float rate = get_rate();
+		float tempo = get_nearest_tempo(info);
+		float rate = get_rate(info);
 		float current = tempo * rate;
 
 		_snwprintf_s(bpm_full, _countof(bpm_full), _TRUNCATE, L"BPM：%.2f × %.2f = %.2f", tempo, rate, current);
@@ -131,7 +167,7 @@ void update_gui(EDIT_INFO* info) {
 
 	// --- 基準時間ラベルの描画 ---
 	wchar_t off_full[128], off_short[64];
-	float current_offset = get_offset();
+	float current_offset = get_nearest_offset(info);
 	int current_f = offset_to_frame(current_offset, info);
 
 	_snwprintf_s(off_full, _countof(off_full), _TRUNCATE, config->translate(config, L"基準：%+dF (%.3fs)"), current_f, current_offset);
@@ -148,6 +184,7 @@ void update_gui(EDIT_INFO* info) {
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
 	switch (message) {
 	case WM_COMMAND:
+		// ボタンと編集メニューから飛んでくる操作を実行する
 		switch (LOWORD(wparam)) {
 		case IDC_BUTTON_MUL_INPUT: multiply_bpm(get_gui_rate()); return TRUE;
 		case IDC_BUTTON_DIV_INPUT: { float v = get_gui_rate(); if (v != 0) multiply_bpm(1.0f / v); } return TRUE;
@@ -175,8 +212,31 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 		return 0;
 	}
 
+	case WM_SETCURSOR:
+		update_gui_on_mouse_enter();
+		break;
+
+	case WM_TIMER:
+		if (wparam == timer_id_mouse_watch) {
+			check_mouse_leave();
+			if (g_mouse_inside_window) {
+				bool released = false;
+				for (int vk = 0; vk < 256; vk++) {
+					bool is_down = (GetAsyncKeyState(vk) & 0x8000) != 0;
+					if (!is_down && g_key_down[vk]) {
+						released = true;
+					}
+					g_key_down[vk] = is_down;
+				}
+				if (released) update_gui();
+			}
+			return 0;
+		}
+		break;
+
 	case WM_SIZE:
 	{
+		// ウィンドウサイズに合わせて各コントロールの位置を再配置する
 		const int w_window = LOWORD(lparam);
 		const int h_window = HIWORD(lparam);
 		g_scroll_pos_y = (h_window >= h_ui) ? 0 : min(g_scroll_pos_y, h_ui - h_window);
@@ -300,21 +360,3 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 			PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_RESET, 0), 0); });
 
 	}
-
-
-/// プラグインウィンドウの後始末 ※beta47以降のクラッシュ対策
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved) {
-	switch (ul_reason_for_call) {
-	case DLL_PROCESS_DETACH:
-	{
-		if (lpReserved != nullptr)
-			break;
-		if (g_hwnd)
-			DestroyWindow(g_hwnd);
-
-		break;
-	}
-	}
-
-	return TRUE;
-}
