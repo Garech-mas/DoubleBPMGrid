@@ -1,8 +1,7 @@
 [DoubleBPMGrid.aux2]
 ; Plugin information
 BPMグリッド倍化=DoubleBPMGrid
-%ls %ls (テスト済: %ls) by Garech=%ls %ls (Tested on: %ls) by Garech
-%lsを動作させるためには、AviUtl2 %lsが必要です。\nAviUtl2を更新してください。=To use %ls, AviUtl2 %ls is required.\nPlease update AviUtl2.
+%ls %ls by Garech=%ls %ls by Garech
 
 ; Log
 不正なBPM(%.2f)が入力されました。(設定可能範囲: 1-1000）=Invalid BPM (%.2f) was entered. (Valid range: 1-1000)
@@ -19,3 +18,4 @@ BPMを1/3にする=Set BPM to 1/3
 グリッドの基準時間を戻す (-1F)=Move grid reference backward (-1F)
 グリッドの基準時間を進める (+1F)=Move grid reference forward (+1F)
 BPMを元に戻す=Reset BPM
+現在フレームにグリッド基準線を追加=Add grid reference line at current frame

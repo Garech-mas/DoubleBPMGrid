@@ -35,6 +35,13 @@ COMMON_PLUGIN_TABLE common_plugin_table;
 static constexpr double EPSILON_FRAME = 1e-12;
 static constexpr float EPSILON_TEMPO = 1e-4f;
 
+/// 現在カーソル位置を秒に変換する
+static double get_cursor_seconds(const EDIT_INFO& info) {
+    return (info.rate > 0 && info.scale > 0)
+        ? static_cast<double>(info.frame) * static_cast<double>(info.scale) / static_cast<double>(info.rate)
+        : 0.0;
+}
+
 /// 倍率に合わせた拍数を計算する
 static int calculate_beat(int beat, float rate) {
     return static_cast<int>(std::ceil(static_cast<double>(beat) * rate));
@@ -55,9 +62,7 @@ static size_t get_nearest_grid_index(const std::vector<BPM_INFO>& grid_list, con
     size_t selected_index = 0;
     if (grid_list.empty()) return selected_index;
 
-    const double cursor_seconds = (info.rate > 0 && info.scale > 0)
-        ? static_cast<double>(info.frame) * static_cast<double>(info.scale) / static_cast<double>(info.rate)
-        : 0.0;
+    const double cursor_seconds = get_cursor_seconds(info);
 
     for (size_t i = 0; i < grid_list.size(); i++) {
         if (grid_list[i].start > cursor_seconds + EPSILON_FRAME) return selected_index;
@@ -290,6 +295,47 @@ void multiply_bpm(float new_rate) {
 }
 
 
+/// 現在カーソル位置にBPMグリッドを追加する
+void add_bpm_grid() {
+    EDIT_INFO info;
+    edit_handle->get_edit_info(&info, sizeof(EDIT_INFO));
+    SceneState& ss = g_scenes[info.scene_id];
+    ensure_scene_grid_list(info.scene_id);
+
+    std::vector<BPM_INFO> before_list = ss.grid_list;
+    bool created_default_list = false;
+    if (ss.grid_list.empty()) {
+        BPM_INFO first_grid{};
+        first_grid.tempo = is_valid_bpm(info.grid_bpm_tempo) ? info.grid_bpm_tempo : 120.0f;
+        first_grid.beat = (info.grid_bpm_beat > 0) ? info.grid_bpm_beat : 4;
+        first_grid.start = 0.0;
+        first_grid.offset = info.grid_bpm_offset;
+        ss.grid_list.push_back(first_grid);
+        created_default_list = true;
+    }
+
+    const double cursor_seconds = get_cursor_seconds(info);
+    size_t insert_index = ss.grid_list.size();
+    for (size_t i = 0; i < ss.grid_list.size(); i++) {
+        if (ss.grid_list[i].start > cursor_seconds + EPSILON_FRAME) {
+            insert_index = i;
+            break;
+        }
+        if (std::abs(ss.grid_list[i].start - cursor_seconds) <= EPSILON_FRAME) {
+            if (created_default_list && !apply_bpm(info.scene_id)) ss.grid_list = before_list;
+            return;
+        }
+    }
+
+    size_t source_index = get_nearest_grid_index(ss.grid_list, info);
+    BPM_INFO new_grid = ss.grid_list[source_index];
+    new_grid.start = cursor_seconds;
+
+    ss.grid_list.insert(ss.grid_list.begin() + insert_index, new_grid);
+    if (!apply_bpm(info.scene_id)) ss.grid_list = before_list;
+}
+
+
 /// グリッドを左右に動かす (-1 / 1)
 void shift_grid(int dir) {
     EDIT_INFO info;
@@ -451,9 +497,9 @@ EXTERN_C __declspec(dllexport) void InitializeConfig(CONFIG_HANDLE* handle) {
     Plugin_Name = config->translate(config, PLUGIN_NAME);
     Plugin_Title = Plugin_Name + L" " + PLUGIN_VERSION;
 
-    LPCWSTR info_fmt = config->translate(config, L"%ls %ls (テスト済: %ls) by Garech");
+    LPCWSTR info_fmt = config->translate(config, L"%ls %ls by Garech");
     wchar_t info_buf[512];
-    std::swprintf(info_buf, 512, info_fmt, Plugin_Name.c_str(), PLUGIN_VERSION, TESTED_BETA);
+    std::swprintf(info_buf, 512, info_fmt, Plugin_Name.c_str(), PLUGIN_VERSION);
     Plugin_Info = info_buf;
 
     common_plugin_table = { Plugin_Name.c_str(), Plugin_Info.c_str() };
@@ -491,7 +537,7 @@ EXTERN_C __declspec(dllexport) void func_scene_change(EDIT_SECTION* edit) {
 
 /// 必須バージョン番号を渡す
 EXTERN_C __declspec(dllexport) DWORD RequiredVersion() {
-    return TESTED_BETA_NO;
+    return REQUIRED_VERSION;
 }
 
 
