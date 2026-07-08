@@ -1,3 +1,6 @@
+[Language]
+Information=DoubleBPMGrid / BPMグリッド倍化 v2.10.x by Garech
+
 [DoubleBPMGrid.aux2]
 ; Plugin information
 BPMグリッド倍化=DoubleBPMGrid
@@ -7,7 +10,7 @@ BPMグリッド倍化=DoubleBPMGrid
 不正なBPM(%.2f)が入力されました。(設定可能範囲: 1-1000）=Invalid BPM (%.2f) was entered. (Valid range: 1-1000)
 
 ; GUI
-BPMを測定=Measure BPM
+BPMを測定する=Measure BPM
 タップし続けて測定=Keep tapping to measure
 基準：%+dF (%.3fs)=Reference: %+dF (%.3fs)
 ▲ BPMを元に戻す=! Reset BPM

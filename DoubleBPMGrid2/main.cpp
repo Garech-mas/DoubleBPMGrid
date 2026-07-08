@@ -406,6 +406,9 @@ void CALLBACK timer_proc(HWND hwnd, UINT msg, UINT_PTR id, DWORD time) {
             // BPMセット前に初期化
             ss.bpm_sum = 0.0;
             ss.bpm_count = -1;
+            // AviUtl2のプレビュー再生を一時停止する (測定終了した区間をBPM反映対象とする)
+            edit_handle->call_edit_section([](EDIT_SECTION*) {
+                });
 
             if (!is_valid_bpm(average_bpm)) {
                 warn_invalid_bpm(average_bpm);

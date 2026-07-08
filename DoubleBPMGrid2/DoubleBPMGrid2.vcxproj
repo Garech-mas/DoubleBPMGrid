@@ -27,10 +27,12 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="gui_style.h" />
     <ClInclude Include="gui.h" />
     <ClInclude Include="main.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="gui_style.cpp" />
     <ClCompile Include="gui.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>

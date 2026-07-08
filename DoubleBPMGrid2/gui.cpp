@@ -2,9 +2,11 @@
 #include <commctrl.h>
 #include <cstdio>
 #include <cmath>
+#include <cwctype>
 
 #include "config2.h"
 #include "gui.h"
+#include "gui_style.h"
 #include "main.h"
 #include <string>
 #include <vector>
@@ -33,10 +35,11 @@ constexpr int w_margin_10 = 10;
 constexpr int w_space_5 = 5;
 constexpr int h_label = 20;
 constexpr int h_btn = 30;
+constexpr int h_edit = 24;
 constexpr int h_btn_measure = 50;
 constexpr int y_space_5 = 5;
 constexpr int y_space_10 = 10;
-constexpr int w_btn_basetime = 40;
+constexpr int w_btn_basetime = 25;
 constexpr int n_btn_basetime = 3;
 
 // 行座標の定義
@@ -50,6 +53,7 @@ constexpr int y_6th_row = y_5th_row + h_btn + y_space_5;
 constexpr int w_ui = 260;
 constexpr int h_ui = y_6th_row + h_btn_measure + y_space_10;
 constexpr UINT WM_UPDATE_GUI = WM_APP + 1;
+constexpr UINT_PTR IDT_UPDATE_GUI = 1;
 
 // グローバル変数
 static HWND g_hwnd = nullptr;
@@ -59,23 +63,56 @@ static std::wstring g_bpm_short_text;
 static std::wstring g_measure_button_text;
 static std::wstring g_offset_full_text;
 static std::wstring g_offset_short_text;
+static std::wstring g_offset_switch_width_text;
+static bool g_update_gui_pending = false;
 
 // メニュー名のコンテナ
 static std::vector<std::wstring> g_registered_menu_names;
+
+static void trim_right(std::wstring& text) {
+	while (!text.empty() && std::iswspace(text.back())) {
+		text.pop_back();
+	}
+}
+
+static void initialize_label_switch_width_texts() {
+	wchar_t offset[128] = {};
+	_snwprintf_s(offset, _countof(offset), _TRUNCATE,
+		config->translate(config, L"基準：%+dF (%.3fs)"), 88, 8.888);
+	g_offset_switch_width_text = offset;
+	size_t offset_time_pos = g_offset_switch_width_text.find(L'(');
+	if (offset_time_pos != std::wstring::npos) {
+		g_offset_switch_width_text.erase(offset_time_pos);
+		trim_right(g_offset_switch_width_text);
+	}
+}
+
+static void post_update_gui() {
+	if (!g_hwnd || !IsWindowVisible(g_hwnd) || g_update_gui_pending) return;
+
+	g_update_gui_pending = true;
+	if (SetTimer(g_hwnd, IDT_UPDATE_GUI, 16, nullptr) == 0) {
+		g_update_gui_pending = (PostMessage(g_hwnd, WM_UPDATE_GUI, 0, 0) != FALSE);
+	}
+}
 
 /// キャッシュ済みの文字列を現在のウィンドウ幅に合わせて反映する
 static void apply_cached_gui_texts() {
 	if (!g_hwnd) return;
 
-	RECT rc;
-	GetClientRect(g_hwnd, &rc);
-	int w = rc.right;
+	gui_style::set_window_text_if_changed(GetDlgItem(g_hwnd, IDC_BUTTON_MEASURE), g_measure_button_text);
 
-	SetWindowTextW(GetDlgItem(g_hwnd, IDC_BUTTON_MEASURE), g_measure_button_text.c_str());
-	SetWindowTextW(GetDlgItem(g_hwnd, IDC_STATIC_BPM_RATE), (w < 180) ? g_bpm_short_text.c_str() : g_bpm_full_text.c_str());
+	HWND bpm_label = GetDlgItem(g_hwnd, IDC_STATIC_BPM_RATE);
+	gui_style::set_window_text_if_changed(
+		bpm_label,
+		gui_style::text_fits(bpm_label, g_bpm_full_text) ? g_bpm_full_text : g_bpm_short_text
+	);
 
-	int label_max_w = w - (2 * w_margin_10) - (n_btn_basetime * w_btn_basetime) - (n_btn_basetime * w_space_5);
-	SetWindowTextW(GetDlgItem(g_hwnd, IDC_STATIC_BASETIME), (label_max_w < 90) ? g_offset_short_text.c_str() : g_offset_full_text.c_str());
+	HWND basetime_label = GetDlgItem(g_hwnd, IDC_STATIC_BASETIME);
+	gui_style::set_window_text_if_changed(
+		basetime_label,
+		gui_style::text_fits(basetime_label, g_offset_switch_width_text) ? g_offset_full_text : g_offset_short_text
+	);
 }
 
 
@@ -111,7 +148,7 @@ void update_gui(EDIT_INFO* info) {
 
 	// --- BPMラベル・BPM測定ボタンの描画 ---
 	wchar_t bpm_full[128], bpm_short[64];
-	const wchar_t* measure_btn_text = config->translate(config, L"BPMを測定");
+	const wchar_t* measure_btn_text = config->translate(config, L"BPMを測定する");
 
 	if (is_measuring()) {
 		float m_bpm = get_measuring_bpm();
@@ -172,6 +209,27 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 		}
 		break;
 
+	case WM_ERASEBKGND:
+		if (gui_style::erase_background(hwnd, (HDC)wparam)) return 1;
+		break;
+
+	case WM_PAINT:
+		gui_style::paint_background(hwnd);
+		return 0;
+
+	case WM_CTLCOLORSTATIC:
+		return gui_style::on_ctl_color_static((HDC)wparam);
+
+	case WM_CTLCOLOREDIT:
+		return gui_style::on_ctl_color_edit((HDC)wparam);
+
+	case WM_CTLCOLORBTN:
+		return gui_style::on_ctl_color_button((HDC)wparam);
+
+	case WM_DRAWITEM:
+		if (gui_style::draw_item((const DRAWITEMSTRUCT*)lparam)) return TRUE;
+		break;
+
 	case WM_MOUSEWHEEL:
 	{
 		const int delta = GET_WHEEL_DELTA_WPARAM(wparam);
@@ -190,8 +248,21 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 		return 0;
 
 	case WM_UPDATE_GUI:
+		if (g_update_gui_pending) {
+			KillTimer(hwnd, IDT_UPDATE_GUI);
+		}
+		g_update_gui_pending = false;
 		update_gui();
 		return 0;
+
+	case WM_TIMER:
+		if (wparam == IDT_UPDATE_GUI) {
+			KillTimer(hwnd, IDT_UPDATE_GUI);
+			g_update_gui_pending = false;
+			update_gui();
+			return 0;
+		}
+		break;
 
 	case WM_SIZE:
 	{
@@ -213,7 +284,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 		constexpr int w_edit_rate_input = 80;
 		const int w_btn_input = (w_window - 2 * w_margin_10 - 2 * w_space_5 - w_edit_rate_input) / 2;
 		DeferPos(IDC_BUTTON_MUL_INPUT, w_margin_10, y_2nd_row, w_btn_input, h_btn);
-		DeferPos(IDC_EDIT_RATE_INPUT, w_margin_10 + w_btn_input + w_space_5, y_2nd_row, 80, h_btn);
+		DeferPos(IDC_EDIT_RATE_INPUT, w_margin_10 + w_btn_input + w_space_5, y_2nd_row + (h_btn - h_edit) / 2, 80, h_edit);
 		DeferPos(IDC_BUTTON_DIV_INPUT, w_window - w_margin_10 - w_btn_input, y_2nd_row, w_btn_input, h_btn);
 
 		// --- 倍率プリセットボタンの描画 ---
@@ -240,11 +311,9 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 		EndDeferWindowPos(hdwp);
 		apply_cached_gui_texts();
 
-		// スクロール位置が変わった場合は再描画
-		if (wparam != 1) {
-			InvalidateRect(hwnd, NULL, FALSE);
-			UpdateWindow(hwnd);
-		}
+		gui_style::redraw_parent_background(hwnd);
+		gui_style::redraw_child(hwnd, IDC_STATIC_BPM_RATE);
+		gui_style::redraw_child(hwnd, IDC_STATIC_BASETIME);
 		return 0;
 	}
 	}
@@ -256,46 +325,73 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 	/// プラグインウィンドウ作成
 	void create_plugin_window(HOST_APP_TABLE* host, HINSTANCE hInstance) {
 		std::wstring Plugin_Name = config->translate(config, PLUGIN_NAME);
+		const gui_style::ControlIds style_ids = {
+			IDC_STATIC_BPM_RATE,
+			IDC_STATIC_BASETIME,
+			IDC_BUTTON_DIV_INPUT,
+			IDC_BUTTON_MUL_INPUT,
+			IDC_BUTTON_MUL2,
+			IDC_BUTTON_DIV2,
+			IDC_BUTTON_MUL3,
+			IDC_BUTTON_DIV3,
+			IDC_BUTTON_RESET,
+			IDC_BUTTON_MEASURE,
+			IDC_BUTTON_BASETIME_MINUS,
+			IDC_BUTTON_BASETIME_PLUS,
+			IDC_BUTTON_ADD_BPM_GRID,
+		};
+		gui_style::initialize(config, style_ids);
+		initialize_label_switch_width_texts();
 
 		WNDCLASSEXW wcex = {};
 		wcex.cbSize = sizeof(WNDCLASSEX);
 		wcex.lpszClassName = Plugin_Name.c_str();
 		wcex.lpfnWndProc = wnd_proc;
 		wcex.hInstance = hInstance;
-		wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+		wcex.hbrBackground = gui_style::background_brush();
 		wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
 		if (!RegisterClassEx(&wcex)) return;
 
 		g_hwnd = CreateWindowEx(
-			0, Plugin_Name.c_str(), Plugin_Name.c_str(), WS_POPUP,
+			0, Plugin_Name.c_str(), Plugin_Name.c_str(), WS_POPUP | WS_CLIPCHILDREN,
 			CW_USEDEFAULT, CW_USEDEFAULT, w_ui, h_ui,
 			nullptr, nullptr, hInstance, nullptr);
 
-		auto CreateChild = [&](const wchar_t* cls, const wchar_t* txt, DWORD style, int id) {
-			CreateWindowEx(0, cls, txt, WS_VISIBLE | WS_CHILD | style, 0, 0, 0, 0, g_hwnd, (HMENU)(INT_PTR)id, hInstance, nullptr);
+		auto CreateChild = [&](const wchar_t* cls, const wchar_t* txt, DWORD style, int id) -> HWND {
+			HWND child = CreateWindowExW(0, cls, txt, WS_VISIBLE | WS_CHILD | WS_CLIPSIBLINGS | style, 0, 0, 0, 0, g_hwnd, (HMENU)(INT_PTR)id, hInstance, nullptr);
+			gui_style::apply_child(child);
+			return child;
+			};
+
+		auto CreateStatic = [&](const wchar_t* txt, DWORD style, int id) {
+			return CreateChild(WC_STATICW, txt, style | SS_OWNERDRAW, id);
+			};
+
+		auto CreateButton = [&](const wchar_t* txt, int id) {
+			HWND child = CreateWindowExW(0, WC_BUTTONW, txt, WS_VISIBLE | WS_CHILD | WS_CLIPSIBLINGS | WS_TABSTOP | BS_OWNERDRAW, 0, 0, 0, 0, g_hwnd, (HMENU)(INT_PTR)id, hInstance, nullptr);
+			gui_style::apply_button(child);
+			return child;
 			};
 
 		// コントロール作成処理（とりあえず作成だけして、WM_SIZE内で再調整）
-		CreateChild(WC_STATICW, L"", SS_CENTER, IDC_STATIC_BPM_RATE);
-		CreateChild(WC_BUTTONW, L"×", BS_PUSHBUTTON, IDC_BUTTON_MUL_INPUT);
-		CreateChild(WC_EDITW, L"2.00", WS_BORDER | ES_CENTER, IDC_EDIT_RATE_INPUT);
-		CreateChild(WC_BUTTONW, L"÷", BS_PUSHBUTTON, IDC_BUTTON_DIV_INPUT);
-		CreateChild(WC_BUTTONW, L"×3", BS_PUSHBUTTON, IDC_BUTTON_MUL3);
-		CreateChild(WC_BUTTONW, L"×2", BS_PUSHBUTTON, IDC_BUTTON_MUL2);
-		CreateChild(WC_BUTTONW, L"÷2", BS_PUSHBUTTON, IDC_BUTTON_DIV2);
-		CreateChild(WC_BUTTONW, L"÷3", BS_PUSHBUTTON, IDC_BUTTON_DIV3);
-		CreateChild(WC_STATICW, L"", SS_LEFT, IDC_STATIC_BASETIME);
-		CreateChild(WC_BUTTONW, L"<", BS_PUSHBUTTON, IDC_BUTTON_BASETIME_MINUS);
-		CreateChild(WC_BUTTONW, L"＋", BS_PUSHBUTTON, IDC_BUTTON_ADD_BPM_GRID);
-		CreateChild(WC_BUTTONW, L">", BS_PUSHBUTTON, IDC_BUTTON_BASETIME_PLUS);
-		CreateChild(WC_BUTTONW, config->translate(config, L"▲ BPMを元に戻す"), BS_PUSHBUTTON, IDC_BUTTON_RESET);
-		CreateChild(WC_BUTTONW, config->translate(config, L"BPMを測定"), BS_PUSHBUTTON, IDC_BUTTON_MEASURE);
+		CreateStatic(L"", SS_CENTER, IDC_STATIC_BPM_RATE);
+		CreateButton(L"×", IDC_BUTTON_MUL_INPUT);
+		gui_style::apply_edit(CreateChild(WC_EDITW, L"2.00", WS_TABSTOP | ES_CENTER | ES_MULTILINE, IDC_EDIT_RATE_INPUT));
+		CreateButton(L"÷", IDC_BUTTON_DIV_INPUT);
+		CreateButton(L"×3", IDC_BUTTON_MUL3);
+		CreateButton(L"×2", IDC_BUTTON_MUL2);
+		CreateButton(L"÷2", IDC_BUTTON_DIV2);
+		CreateButton(L"÷3", IDC_BUTTON_DIV3);
+		CreateStatic(L"", SS_LEFT, IDC_STATIC_BASETIME);
+		CreateButton(L"<", IDC_BUTTON_BASETIME_MINUS);
+		CreateButton(L"＋", IDC_BUTTON_ADD_BPM_GRID);
+		CreateButton(L">", IDC_BUTTON_BASETIME_PLUS);
+		CreateButton(config->translate(config, L"▲ BPMを元に戻す"), IDC_BUTTON_RESET);
+		CreateButton(config->translate(config, L"BPMを測定する"), IDC_BUTTON_MEASURE);
 
 		host->register_window_client(Plugin_Name.c_str(), g_hwnd);
 		host->register_event_listener(EVENT_TYPE::CHANGE_EDIT_FRAME, nullptr, [](void*) {
-			if (g_hwnd && IsWindowVisible(g_hwnd)) {
-				PostMessage(g_hwnd, WM_UPDATE_GUI, 0, 0);
-			}
+			post_update_gui();
 		});
 
 		// 編集メニュー追加処理
@@ -327,7 +423,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 		host->register_edit_menu(g_registered_menu_names.back().c_str(), [](EDIT_SECTION* edit) {
 			PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_RESET, 0), 0); });
 
-		g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを測定"));
+		g_registered_menu_names.push_back(Plugin_Name + L"\\" + config->translate(config, L"BPMを測定する"));
 		host->register_edit_menu_param(g_registered_menu_names.back().c_str(), nullptr, [](void* param) {
 			PostMessage(g_hwnd, WM_COMMAND, MAKEWPARAM(IDC_BUTTON_MEASURE_KEY, 0), 0); });
 
