@@ -33,6 +33,8 @@ ZIPの中に入っている `DoubleBPMGrid.aux2` を、AviUtl2のプレビュー
 ## 使用方法 (AviUtl 無印)
 `設定 ＞ BPMグリッド倍化の設定` から操作ウィンドウを開きます。
 
+<img width="316" height="150" alt="image" src="https://github.com/user-attachments/assets/8ab773fd-5513-45ac-a320-4fd2b6fac8e6" />
+
 #### BPMを半分にする / 2倍にする（グリッド間隔を広める / 狭める）
 変更倍率を2に設定した場合、BPMを1/2倍・2倍に変更します。
 - 変更倍率は 2~8 まで設定でき、1/N倍・N倍に変更できます。
@@ -54,10 +56,12 @@ ZIPの中に入っている `DoubleBPMGrid.aux2` を、AviUtl2のプレビュー
 ## 使用方法 (AviUtl2)
 - `設定 ＞ BPMグリッド倍化` から操作ウィンドウを開きます。  
 - 現在の区間のBPM、変更倍率、オフセット（秒数・フレーム数）が表示されます。
+- 
+<img width="272" height="277" alt="image" src="https://github.com/user-attachments/assets/1a3fd959-5e83-4d8f-bdd0-8ac521e5542d" />
 
 #### BPMを ○倍する / ○で割る
 - 「×」「÷」が含まれるボタンから操作できます。  
-- カーソル位置にかかわらず、すべての区間のBPMと拍子をN倍・N分の１倍します。
+- カーソル位置にかかわらず、すべての区間のBPMと拍子をN倍・N分の1倍します。
 
 #### グリッドの基準時間を戻す / 進める
 - 「＜」「＞」ボタンから操作できます。  
