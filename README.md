@@ -17,6 +17,11 @@ ZIPの中に入っている `DoubleBPMGrid.auf` を、AviUtlと同階層、ま�
   https://aka.ms/vs/17/release/vc_redist.x86.exe
 
 ## 導入方法 (AviUtl2)
+### [AviUtl2 カタログ](https://github.com/Neosku/aviutl2-catalog/releases/latest) を使った方法
+[![AviUtl2 Catalog](https://aviutl2-catalog-badge.sevenc7c.workers.dev/badge/v/Garech.DoubleBPMGrid)](https://aviutl2-catalog-badge.sevenc7c.workers.dev/package/Garech.DoubleBPMGrid) ←こちらのボタンから、AviUtl2 カタログでの当プラグイン紹介ページを開けます。  
+画面右下辺りのインストールボタンからダウンロード・インストールできます。
+
+### 手動での導入方法
 ZIPの中に入っている `DoubleBPMGrid.aux2` を、AviUtl2のプレビュー画面にドラッグ＆ドロップしてください。
 
 > [!NOTE]
